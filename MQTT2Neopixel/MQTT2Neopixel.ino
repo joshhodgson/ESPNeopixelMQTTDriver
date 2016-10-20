@@ -17,6 +17,15 @@ const char* ssid = "****";
 const char* password = "*****";
 const char* mqtt_server = "192.168.1.15";
 
+float red = 0.0;
+float green = 0.0;
+float blue = 0.0;
+float white = 0.0;
+bool fading = 0;
+int targetN = 0;
+
+int targetRed, targetBlue, targetGreen, targetWhite;
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
@@ -76,15 +85,23 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println("Setting block color");
     Serial.println(message);
 
-    int red = message.substring(0, 3).toInt();
-    int green = message.substring(3, 6).toInt();
-    int blue = message.substring(6, 9).toInt();
-    int white = message.substring(9, 12).toInt();
-
-    for (uint16_t i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, red, green, blue, white);
+    targetRed = message.substring(0, 3).toInt();
+    targetGreen = message.substring(3, 6).toInt();
+    targetBlue = message.substring(6, 9).toInt();
+    targetWhite = message.substring(9, 12).toInt();
+    targetN = message.substring(12).toInt() / 10;
+    if (targetN > 0) {
+      fading = true;
+    } else {
+      for (uint16_t i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, targetRed, targetGreen, targetBlue, targetWhite);
+      }
+      strip.show();
+      red = targetRed;
+      green = targetGreen;
+      blue = targetBlue;
+      white = targetWhite;
     }
-    strip.show();
 
 
   }
@@ -120,5 +137,34 @@ void loop() {
     reconnect();
   }
   client.loop();
+  if (fading) {
+    int n = 0;
+    float deltaRed = (targetRed - red) / targetN;
+    float deltaGreen = (targetGreen - green) / targetN;
+    float deltaBlue = (targetBlue - blue) / targetN;
+    float deltaWhite = (targetWhite - white) / targetN;
+
+    while (fading) {
+      red += deltaRed;
+      green += deltaGreen;
+      blue += deltaBlue;
+      white += deltaWhite;
+      for (uint16_t i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, (int)red, (int)green, (int)blue, (int)white);
+      }
+      strip.show();
+      n += 1;
+      if (n >= targetN) {
+        n = 0;
+        fading = false;
+      }
+      delay(10);
+      client.loop();
+
+    }
+
+  }
+
+  yield();
 
 }
